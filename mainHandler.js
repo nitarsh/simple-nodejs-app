@@ -8,6 +8,7 @@ function sendJSONObject(res, object) {
 
 function sendErrorObject(res, code, message) {
   res.statusCode = code;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify({ message }));
 }
 
@@ -28,9 +29,33 @@ function getRequestBody(req) {
   });
 }
 
-function apiRouter() {
+function genericAPIModuleRouter() {
   const router = Router();
-  router.get("/api/something", (req, res) => res.sendJSONObject({ a: "a" }));
+  router.get("/api/modules/:module", async (req, res) => {
+    const module = req.params.module;
+    const result = await this.mongo.getAll(module);
+    res.sendJSONObject(result);
+    return;
+  });
+  router.post("/api/modules/:module", async (req, res) => {
+    const module = req.params.module;
+    const obj = await req.getRequestBody();
+    const r = await this.mongo.insert(module, obj);
+    res.sendJSONObject(r);
+    return;
+  });
+  router.delete("/api/modules/:module/:id", async (req, res) => {
+    const id = req.params.id;
+    const module = req.params.module;
+
+    if (id.length === 24) {
+      const r = await this.mongo.delete(module, id);
+      res.sendJSONObject(r);
+    } else {
+      res.sendError(422, "Invalid format for Id");
+    }
+    return;
+  });
   return router;
 }
 
@@ -40,8 +65,9 @@ async function mainHandler(req, res) {
   req.getRequestBody = () => getRequestBody(req);
 
   printRequest(req);
-  if (req.url.startsWith("/api")) apiRouter()(req, res, finalhandler(req, res));
-  res.end();
+  if (req.url.startsWith("/api/modules/"))
+    genericAPIModuleRouter()(req, res, finalhandler(req, res));
+  else res.sendErrorObject(404, "Invalid path");
 }
 
 function printRequest(req) {
